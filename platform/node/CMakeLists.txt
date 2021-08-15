@@ -20,6 +20,8 @@ add_node_module(
         72
         79
         83
+        88
+        93
 )
 
 target_sources(
