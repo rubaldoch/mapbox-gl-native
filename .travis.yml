@@ -1,0 +1,88 @@
+language: cpp
+
+compiler:
+  - gcc
+
+addons:
+  homebrew:
+    packages:
+    - glfw3
+    - gcc@7
+    update: true
+  apt:
+    packages:
+    - xvfb
+    - mesa-utils
+    - libosmesa6-dev
+    - libgl1-mesa-glx
+    - libgl1-mesa-dev
+    - libegl1-mesa-dev
+    - libglfw3
+    - libglfw3-dev
+    - mesa-common-dev
+    - libuv1
+    - libuv1-dev
+
+matrix:
+  include:
+    - os: osx
+      osx_image: xcode11 # https://github.com/mapbox/mapbox-gl-native/issues/16540
+      env: BUILDTYPE=RelWithDebInfo
+    - os: linux
+      dist: focal
+      env: BUILDTYPE=RelWithDebInfo
+
+before_install:
+  - >
+    if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+    mkdir $HOME/usr;
+    export PATH="$HOME/usr/bin:$PATH";
+    wget https://cmake.org/files/v3.18/cmake-3.18.3-Linux-x86_64.sh;
+    chmod +x cmake-3.18.3-Linux-x86_64.sh;
+    ./cmake-3.18.3-Linux-x86_64.sh --prefix=$HOME/usr --exclude-subdir --skip-license;
+    fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then xvfb-run -s '-screen 0 1024x768x24 +iglx' glxinfo; fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then sudo apt-get purge nvidia*; fi
+  - COMMIT_MESSAGE=$(git show -s --format=%B $TRAVIS_COMMIT | tr -d '\n')
+  - PUBLISH_BINARY=false
+  - if test "${COMMIT_MESSAGE#*'[publish binary]'}" != "$COMMIT_MESSAGE" && test "${TRAVIS_BRANCH}" == "master" && test "${TRAVIS_PULL_REQUEST}" == "false"; then PUBLISH_BINARY=true; fi;
+  - git clone https://github.com/creationix/nvm.git ../.nvm && source ../.nvm/nvm.sh
+  - nvm install 10
+  - nvm use 10
+  - node --version
+  - npm --version
+  - cmake --version
+  - $CXX --version
+  - echo $DISPLAY
+  - NPM_CACHE=$(npm config get cache)
+  - echo $NPM_CACHE
+  - if [ -d $NPM_CACHE ]; then sudo chown -R $USER $NPM_CACHE; fi;
+
+install:
+  - git submodule update --init --recursive
+  - (grep -v "platform/node" ./platform/macos/macos.cmake > tmp; mv tmp ./platform/macos/macos.cmake)
+  - (grep -v "platform/node" ./platform/linux/linux.cmake > tmp; mv tmp ./platform/linux/linux.cmake)
+  - >
+    if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+    sed -i 's/OpenGL REQUIRED GLX/OpenGL REQUIRED EGL/g' ./platform/linux/linux.cmake;
+    sed -i 's/OpenGL::GLX/OpenGL::EGL/g' ./platform/linux/linux.cmake;
+    sed -i 's/if(NOT \${ICU_FOUND} OR "\${ICU_VERSION}" VERSION_LESS [0-9]*.[0-9]*)/if(TRUE)/g' ./platform/linux/linux.cmake;
+    sed -i 's/\/platform\/linux\/src\/headless_backend_glx/\/platform\/linux\/src\/headless_backend_egl/g' ./platform/linux/linux.cmake;
+    fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then sed -i 's/node-pre-gyp install --fallback-to-build=false//g' ./package.json; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then sed -i .bak 's/node-pre-gyp install --fallback-to-build=false//g' ./package.json; fi
+  - npm install
+  - mkdir build
+  - cmake -S . -B build
+  - cmake --build build
+
+script:
+  - ./node_modules/.bin/node-pre-gyp package testpackage
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then (nvm use 10 && xvfb-run -s '-screen 0 1024x768x24 +iglx' npm test); fi
+  - >
+    if [[ "${PUBLISH_BINARY}" == "true" ]]; then
+    ./platform/node/scripts/publish.sh $GITHUB_TOKEN;
+    rm -rf {build,lib};
+    ./node_modules/.bin/node-pre-gyp install --fallback-to-build=false;
+    if [[ $TRAVIS_OS_NAME == "linux" ]]; then xvfb-run -s '-screen 0 1024x768x24 +iglx' npm test; fi;
+    fi
