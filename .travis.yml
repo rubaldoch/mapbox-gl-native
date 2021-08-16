@@ -74,7 +74,7 @@ install:
   - npm install
   - mkdir build
   - cmake -S . -B build
-  - cmake --build build -f $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
+  - cmake --build build -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
 
 script:
   - >
