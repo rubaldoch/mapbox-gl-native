@@ -77,7 +77,4 @@ install:
   - cmake --build build -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
 
 script:
-  - >
-    if [[ "${PUBLISH_BINARY}" == "true" ]]; then
-    ./platform/node/scripts/publish.sh $GITHUB_TOKEN;
-    fi
+  - ./platform/node/scripts/publish.sh $GITHUB_TOKEN
