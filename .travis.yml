@@ -74,15 +74,10 @@ install:
   - npm install
   - mkdir build
   - cmake -S . -B build
-  - cmake --build build
+  - cmake --build build -f $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
 
 script:
-  - ./node_modules/.bin/node-pre-gyp package testpackage
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then (nvm use 10 && xvfb-run -s '-screen 0 1024x768x24 +iglx' npm test); fi
   - >
     if [[ "${PUBLISH_BINARY}" == "true" ]]; then
     ./platform/node/scripts/publish.sh $GITHUB_TOKEN;
-    rm -rf {build,lib};
-    ./node_modules/.bin/node-pre-gyp install --fallback-to-build=false;
-    if [[ $TRAVIS_OS_NAME == "linux" ]]; then xvfb-run -s '-screen 0 1024x768x24 +iglx' npm test; fi;
     fi
